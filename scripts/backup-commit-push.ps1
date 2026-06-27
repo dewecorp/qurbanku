@@ -61,9 +61,11 @@ $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $zipPath = Join-Path $backupDir "qurbanku-backup-$timestamp.zip"
 $backupItems = @(
   "index.html",
+  "Code.gs",
   "Code_simple.gs",
   "qurbanku-blogger-theme.xml",
   "backup-commit-push.bat",
+  "script push github qurbanku.txt",
   "scripts"
 )
 
@@ -111,7 +113,7 @@ if (-not $gitEmail) {
   git config user.email "dewecorp@users.noreply.github.com"
 }
 
-git add index.html Code_simple.gs qurbanku-blogger-theme.xml backup-commit-push.bat scripts backups
+git add index.html Code.gs Code_simple.gs qurbanku-blogger-theme.xml backup-commit-push.bat "script push github qurbanku.txt" scripts backups
 
 $hasChanges = $false
 if (-not (Test-GitCommand diff --cached --quiet)) {
