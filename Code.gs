@@ -94,8 +94,9 @@ function normalizeClientPayload(ss, request) {
   };
 
   if (action === "saveTahap") {
+    var tahapId = safeString(data.id) || generateId("t");
     payload.tahaps.push({
-      id: safeString(data.id) || generateId("t"),
+      id: tahapId,
       name: safeString(data.nama || data.name),
       status: safeString(data.status || "Aktif"),
       updatedAt: now
@@ -439,6 +440,19 @@ function saveDataToSheets(ss, postData) {
   // 1. MERGE SHEET TAHAP
   var sheetTahap = ss.getSheetByName("Tahap") || ss.insertSheet("Tahap");
   var mergedTahaps = mergeLWW(parseTahap(sheetTahap), postData.tahaps);
+  var requestedActiveTahap = null;
+  (postData.tahaps || []).forEach(function(t) {
+    if (safeString(t.status) === "Aktif") requestedActiveTahap = safeString(t.id);
+  });
+  if (requestedActiveTahap) {
+    mergedTahaps = mergedTahaps.map(function(t) {
+      if (safeString(t.id) !== requestedActiveTahap && safeString(t.status) === "Aktif") {
+        t.status = "Nonaktif";
+        t.updatedAt = Date.now();
+      }
+      return t;
+    });
+  }
   sheetTahap.clear();
   sheetTahap.appendRow(["ID Tahap", "Nama Tahap", "Status", "UpdatedAt"]);
   var tahapRows = mergedTahaps.map(function(t) {

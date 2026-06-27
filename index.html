@@ -569,6 +569,13 @@
                     </span>
                     <input class='w-full pl-9 pr-4 py-2 text-xs rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition text-slate-700 bg-white shadow-xs' id='deposit-search' oninput='resetDepositPagination()' placeholder='Cari transaksi...' type='text'/>
                   </div>
+                  <select class='px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 min-w-[160px]' id='deposit-stage-filter' onchange='changeStageFilter(this.value)'></select>
+                  <button class='px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 transition shadow-md shadow-emerald-500/10' onclick='exportDepositsExcel()'>
+                    <i class='w-3.5 h-3.5' data-lucide='file-spreadsheet'></i> Excel
+                  </button>
+                  <button class='px-3 py-2 border border-slate-200 hover:border-slate-300 text-slate-600 text-xs font-semibold rounded-xl flex items-center gap-1.5 transition bg-white' onclick='printDepositsPdf()'>
+                    <i class='w-3.5 h-3.5' data-lucide='file-text'></i> PDF
+                  </button>
                   <button class='bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-2 rounded-xl transition flex items-center gap-1.5 shadow-md shadow-emerald-500/10' onclick='openAddDeposit()'>
                     <i class='w-3.5 h-3.5' data-lucide='plus'></i> Catat Setoran
                   </button>
@@ -621,7 +628,8 @@
                   </h3>
                   <p class='text-[10px] text-slate-400 mt-1'>Visualisasi progres kepatuhan setoran tabungan shohibul per bulan pertemuan.</p>
                 </div>
-                <div class='flex items-center gap-2'>
+                <div class='flex flex-wrap items-center gap-2'>
+                  <select class='px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 min-w-[160px]' id='rekap-stage-filter' onchange='changeStageFilter(this.value)'></select>
                   <button class='px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 transition shadow-md shadow-emerald-500/10' onclick='exportRekapExcel()'>
                     <i class='w-3.5 h-3.5' data-lucide='file-spreadsheet'></i> Ekspor Excel
                   </button>
@@ -699,7 +707,7 @@
     // =========================================================================
     // CONFIGURASI UTAMA DEPLOYMENT (PENTING!)
     // =========================================================================
-    const APP_VERSION = "qurbanku-2026-06-27-datepicker-setoran-v12";
+    const APP_VERSION = "qurbanku-2026-06-27-filter-tahap-v14";
     // Ubah IS_PREVIEW ke false jika Anda akan mem-publish aplikasi ke Blogger Live.
     const IS_PREVIEW = false; 
     const DEFAULT_GAS_URL = "https://script.google.com/macros/s/AKfycbwbmHjkY5cAlZEhKwn33m1mrIMOqLLp9bFHJO3wX7w0OKCLK1X4RaXXhWu6HwUKbnm0/exec";
@@ -746,6 +754,7 @@
       activeLoginTab: "admin",
       depositPage: 1,
       depositPageSize: 10,
+      selectedTahapId: "",
       settings: {},
       data: {
         tahap: [],
@@ -984,7 +993,13 @@
             // Logika simulasi penyimpanan lokal
             const id = "MOCK_" + Date.now();
             payload.id = id;
-            if (action === "saveTahap") appState.data.tahap.push(payload);
+            if (action === "saveTahap") {
+              if (payload.status === "Aktif") {
+                appState.data.tahap.forEach(t => { if (t.id !== payload.id) t.status = "Nonaktif"; });
+                appState.selectedTahapId = payload.id;
+              }
+              appState.data.tahap.push(payload);
+            }
             if (action === "saveKelompok") appState.data.kelompok.push(payload);
             if (action === "saveAnggota") appState.data.anggota.push(payload);
             if (action === "saveSetoran") appState.data.setoran.push(payload);
@@ -1004,6 +1019,9 @@
           }
           applyCloudSettings(response);
           appState.data = normalizeCloudData(response);
+          if (action === "saveTahap" && payload.status === "Aktif") {
+            appState.selectedTahapId = getActiveTahap()?.id || "";
+          }
           afterDataLoaded();
           showLoading(false);
           showToast("Data tersimpan dan tersinkron ke Google Sheet.", "success");
@@ -1294,6 +1312,7 @@
     // RENDERING DATA & LOGIC PRESENTASI
     // =========================================================================
     function renderAllContent() {
+      renderStageFilters();
       renderDashboard();
       renderTahap();
       renderKelompok();
@@ -1328,20 +1347,68 @@
       return [...items].sort((a, b) => String(a.nama || "").localeCompare(String(b.nama || ""), "id-ID", { sensitivity: "base", numeric: true }));
     }
 
+    function getActiveTahap() {
+      return appState.data.tahap.find(t => t.status === "Aktif") || appState.data.tahap[0] || null;
+    }
+
+    function getSelectedTahapId() {
+      const activeTahap = getActiveTahap();
+      const validIds = appState.data.tahap.map(t => t.id);
+      if (!appState.selectedTahapId || !validIds.includes(appState.selectedTahapId)) {
+        appState.selectedTahapId = activeTahap ? activeTahap.id : "";
+      }
+      return appState.selectedTahapId;
+    }
+
+    function getSelectedTahapName() {
+      const selectedId = getSelectedTahapId();
+      return appState.data.tahap.find(t => t.id === selectedId)?.nama || "Tahap Aktif";
+    }
+
+    function getRecordTahapId(record) {
+      return record?.tahapId || record?.tahap_id || appState.data.tahap[0]?.id || "";
+    }
+
+    function isRecordInSelectedTahap(record) {
+      return getRecordTahapId(record) === getSelectedTahapId();
+    }
+
+    function getSelectedTahapDeposits() {
+      return appState.data.setoran.filter(d => isRecordInSelectedTahap(d));
+    }
+
+    function renderStageFilters() {
+      const selectedId = getSelectedTahapId();
+      const options = appState.data.tahap.map(t => `<option value="${escapeHtml(t.id)}" ${t.id === selectedId ? "selected" : ""}>${escapeHtml(t.nama)}${t.status === "Aktif" ? " (Aktif)" : ""}</option>`).join("");
+      ["deposit-stage-filter", "rekap-stage-filter"].forEach(id => {
+        const select = document.getElementById(id);
+        if (select) select.innerHTML = options || `<option value="">Tahap Aktif</option>`;
+      });
+    }
+
+    function changeStageFilter(tahapId) {
+      appState.selectedTahapId = tahapId;
+      appState.depositPage = 1;
+      renderStageFilters();
+      renderDashboard();
+      renderDeposits();
+      renderRekap();
+    }
+
     function getParticipantTotalSaving(anggotaId) {
-      return appState.data.setoran
+      return getSelectedTahapDeposits()
         .filter(d => d.anggota_id === anggotaId)
         .reduce((sum, d) => sum + Number(d.jumlah), 0);
     }
 
     function getParticipantDeposits(anggotaId) {
-      return appState.data.setoran
+      return getSelectedTahapDeposits()
         .filter(d => d.anggota_id === anggotaId)
         .sort((a, b) => Number(a.bulan) - Number(b.bulan) || parseDepositDate(a.tanggal) - parseDepositDate(b.tanggal));
     }
 
     function getLatestActiveMonth() {
-      return Math.max(0, ...appState.data.setoran.map(d => Number(d.bulan) || 0));
+      return Math.max(0, ...getSelectedTahapDeposits().map(d => Number(d.bulan) || 0));
     }
 
     function renderMemberDashboard() {
@@ -1353,7 +1420,7 @@
 
       const member = appState.user.data;
       const group = appState.data.kelompok.find(g => g.id === member.kelompok_id);
-      const activeStage = appState.data.tahap.find(t => t.status === "Aktif")?.nama || "Tahap Aktif";
+      const activeStage = getSelectedTahapName();
       const deposits = getParticipantDeposits(member.id);
       const totalPaid = deposits.reduce((sum, d) => sum + Number(d.jumlah || 0), 0);
       const paidMonths = new Set(deposits.map(d => Number(d.bulan))).size;
@@ -1456,7 +1523,7 @@
       const totalSakuGlobal = appState.data.setoran.reduce((sum, d) => sum + Number(d.jumlah), 0);
       const totalShohibul = appState.data.anggota.length;
       const totalGroup = appState.data.kelompok.length;
-      const activeStage = appState.data.tahap.find(t => t.status === "Aktif")?.nama || "Tidak Ada";
+      const activeStage = getActiveTahap()?.nama || "Tidak Ada";
 
       containerStats.innerHTML = `
         <div class="bg-gradient-to-br from-emerald-600 to-emerald-800 text-white p-5 rounded-2xl shadow-sm space-y-2">
@@ -1653,22 +1720,14 @@
     }
 
     // --- SETORAN TABLE ---
-    function renderDeposits() {
+    function getFilteredDepositRows() {
       const query = document.getElementById("deposit-search").value.toLowerCase();
-      const tbody = document.getElementById("deposit-table-body");
-      const pageSizeSelect = document.getElementById("deposit-page-size");
-      tbody.innerHTML = "";
-      if (pageSizeSelect && Number(pageSizeSelect.value) !== appState.depositPageSize) {
-        pageSizeSelect.value = String(appState.depositPageSize);
-      }
-      
-      // Filter transaksi
-      const filtered = appState.data.setoran.filter(d => {
+      const filtered = getSelectedTahapDeposits().filter(d => {
         const owner = appState.data.anggota.find(a => a.id === d.anggota_id);
         return (
           (owner && owner.nama.toLowerCase().includes(query)) ||
-          d.recorded_by.toLowerCase().includes(query) ||
-          (d.catatan && d.catatan.toLowerCase().includes(query))
+          String(d.recorded_by || "").toLowerCase().includes(query) ||
+          String(d.catatan || "").toLowerCase().includes(query)
         );
       });
 
@@ -1680,6 +1739,22 @@
         if (updateDiff !== 0) return updateDiff;
         return Number(b.bulan || 0) - Number(a.bulan || 0);
       });
+
+      return filtered.map((d, index) => {
+        const owner = appState.data.anggota.find(a => a.id === d.anggota_id);
+        return { no: index + 1, deposit: d, owner };
+      });
+    }
+
+    function renderDeposits() {
+      const tbody = document.getElementById("deposit-table-body");
+      const pageSizeSelect = document.getElementById("deposit-page-size");
+      tbody.innerHTML = "";
+      if (pageSizeSelect && Number(pageSizeSelect.value) !== appState.depositPageSize) {
+        pageSizeSelect.value = String(appState.depositPageSize);
+      }
+
+      const filtered = getFilteredDepositRows();
 
       const totalRows = filtered.length;
       const totalPages = Math.max(1, Math.ceil(totalRows / appState.depositPageSize));
@@ -1693,14 +1768,14 @@
         tbody.appendChild(tr);
       }
 
-      pageRows.forEach((d, index) => {
-        const owner = appState.data.anggota.find(a => a.id === d.anggota_id);
+      pageRows.forEach(row => {
+        const d = row.deposit;
         const tr = document.createElement("tr");
         tr.className = "hover:bg-slate-50/50 transition";
         tr.innerHTML = `
-          <td class="p-4 pl-6 text-center font-bold text-slate-500 text-xs">${startIndex + index + 1}</td>
+          <td class="p-4 pl-6 text-center font-bold text-slate-500 text-xs">${row.no}</td>
           <td class="p-4 font-semibold text-slate-500 text-xs">${formatDepositDate(d.tanggal)}</td>
-          <td class="p-4 font-bold text-slate-800 text-xs">${owner ? owner.nama : "Tidak Diketahui"}</td>
+          <td class="p-4 font-bold text-slate-800 text-xs">${row.owner ? row.owner.nama : "Tidak Diketahui"}</td>
           <td class="p-4 font-semibold text-slate-700 text-xs">Bulan Ke-${d.bulan}</td>
           <td class="p-4 text-emerald-800 font-extrabold text-xs">${formatRupiah(d.jumlah)}</td>
           <td class="p-4 text-slate-700 text-xs font-medium">${d.recorded_by}</td>
@@ -1714,6 +1789,75 @@
       });
 
       renderDepositPagination(totalRows, totalPages, startIndex, pageRows.length);
+    }
+
+    function exportDepositsExcel() {
+      const rows = getFilteredDepositRows();
+      const total = rows.reduce((sum, row) => sum + Number(row.deposit.jumlah || 0), 0);
+      const bodyRows = rows.map(row => {
+        const d = row.deposit;
+        return `<tr><td>${row.no}</td><td>${formatDepositDate(d.tanggal)}</td><td>${escapeHtml(row.owner ? row.owner.nama : "Tidak Diketahui")}</td><td>Bulan Ke-${Number(d.bulan) || ""}</td><td>${Number(d.jumlah || 0)}</td><td>${escapeHtml(d.recorded_by || "")}</td><td>${escapeHtml(d.catatan || "")}</td></tr>`;
+      }).join("");
+      const excelHtml = `<html><head><meta charset="UTF-8"></head><body><table border="1"><tr><th colspan="7">Data Catatan Setoran QurbanKu</th></tr><tr><th>No</th><th>Tanggal</th><th>Nama Shohibul</th><th>Bulan Pertemuan</th><th>Jumlah Setor</th><th>Penerima</th><th>Catatan</th></tr>${bodyRows}<tr><td colspan="4"><strong>Total</strong></td><td><strong>${total}</strong></td><td colspan="2"></td></tr></table></body></html>`;
+      const blob = new Blob([excelHtml], { type: "application/vnd.ms-excel;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `data-setoran-qurbanku-${new Date().toISOString().slice(0, 10)}.xls`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      showToast("File Excel data setoran berhasil dibuat.", "success");
+    }
+
+    function buildDepositsReportHtml() {
+      const rows = getFilteredDepositRows();
+      const printedAt = new Date().toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" });
+      const total = rows.reduce((sum, row) => sum + Number(row.deposit.jumlah || 0), 0);
+      const bodyRows = rows.map(row => {
+        const d = row.deposit;
+        return `<tr><td class="num">${row.no}</td><td>${formatDepositDate(d.tanggal)}</td><td class="name">${escapeHtml(row.owner ? row.owner.nama : "Tidak Diketahui")}</td><td>B${Number(d.bulan) || ""}</td><td class="amount">${formatRupiah(Number(d.jumlah || 0))}</td><td>${escapeHtml(d.recorded_by || "")}</td><td class="note">${escapeHtml(d.catatan || "-")}</td></tr>`;
+      }).join("");
+
+      return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Data Setoran QurbanKu</title><style>
+        @page { size: A4 landscape; margin: 12mm; }
+        * { box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; color: #0f172a; margin: 0; font-size: 11px; }
+        .letterhead { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #047857; padding-bottom: 12px; margin-bottom: 14px; }
+        .brand h1 { margin: 0 0 4px; font-size: 22px; color: #065f46; }
+        .brand p { margin: 2px 0; color: #475569; }
+        .meta { text-align: right; color: #475569; line-height: 1.5; }
+        .summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 12px 0 14px; }
+        .box { border: 1px solid #cbd5e1; padding: 8px; border-radius: 6px; }
+        .box span { display: block; color: #64748b; font-size: 9px; text-transform: uppercase; font-weight: 700; margin-bottom: 4px; }
+        .box strong { font-size: 13px; color: #064e3b; }
+        table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        th, td { border: 1px solid #cbd5e1; padding: 6px 5px; text-align: left; vertical-align: top; }
+        th { background: #ecfdf5; color: #064e3b; font-size: 10px; text-align: center; }
+        .num { width: 34px; text-align: center; }
+        .name { font-weight: 700; }
+        .amount { text-align: right; font-weight: 700; color: #047857; }
+        .note { color: #475569; }
+        tfoot td { font-weight: 700; background: #f8fafc; }
+      </style></head><body>
+        <div class="letterhead"><div class="brand"><h1>QurbanKu</h1><p>Data Catatan Setoran Tabungan</p></div><div class="meta"><strong>Laporan Setoran</strong><br>Dicetak: ${printedAt}<br>Jumlah Data: ${rows.length}</div></div>
+        <div class="summary"><div class="box"><span>Total Transaksi</span><strong>${rows.length} Data</strong></div><div class="box"><span>Total Setoran</span><strong>${formatRupiah(total)}</strong></div><div class="box"><span>Urutan</span><strong>Terbaru di Atas</strong></div></div>
+        <table><thead><tr><th>No</th><th>Tanggal</th><th>Nama Shohibul</th><th>Bulan</th><th>Jumlah Setor</th><th>Penerima</th><th>Catatan</th></tr></thead><tbody>${bodyRows || `<tr><td colspan="7" style="text-align:center;color:#64748b;">Tidak ada data setoran.</td></tr>`}</tbody><tfoot><tr><td colspan="4">Total</td><td class="amount">${formatRupiah(total)}</td><td colspan="2"></td></tr></tfoot></table>
+      </body></html>`;
+    }
+
+    function printDepositsPdf() {
+      const printWindow = window.open("", "_blank", "width=1200,height=800");
+      if (!printWindow) {
+        showToast("Popup PDF diblokir browser. Izinkan popup untuk membuka laporan.", "error");
+        return;
+      }
+      printWindow.document.open();
+      printWindow.document.write(buildDepositsReportHtml());
+      printWindow.document.close();
+      printWindow.focus();
+      setTimeout(() => printWindow.print(), 400);
     }
 
     function resetDepositPagination() {
@@ -1808,7 +1952,7 @@
     }
 
     function getRekapMonthDate(month) {
-      const dates = appState.data.setoran
+      const dates = getSelectedTahapDeposits()
         .filter(d => Number(d.bulan) === month)
         .map(d => parseDepositDate(d.tanggal))
         .filter(date => date instanceof Date && !Number.isNaN(date.getTime()))
@@ -1850,7 +1994,7 @@
     }
 
     function getRekapMonthAmount(anggotaId, month) {
-      const matchedDeposit = appState.data.setoran.find(d => d.anggota_id === anggotaId && Number(d.bulan) === month);
+      const matchedDeposit = getSelectedTahapDeposits().find(d => d.anggota_id === anggotaId && Number(d.bulan) === month);
       return matchedDeposit ? Number(matchedDeposit.jumlah || 0) : 0;
     }
 
@@ -1911,7 +2055,7 @@
       const printedAt = new Date().toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" });
       const ketua = appState.settings.ketuaName || "Ketua Arisan";
       const bendahara = appState.settings.bendaharaName || "Bendahara Arisan";
-      const activeStage = appState.data.tahap.find(t => t.status === "Aktif")?.nama || "Periode Aktif";
+      const activeStage = getSelectedTahapName();
       const nominalArisan = Number(appState.settings.monthlyInstallment || 150000);
       const headerCells = Array.from({ length: 12 }, (_, i) => {
         const month = i + 1;
@@ -2296,7 +2440,8 @@
         jumlah: parseMoneyInput(document.getElementById("deposit-amount").value),
         bulan: Number(document.getElementById("deposit-bulan").value),
         recorded_by: document.getElementById("deposit-recorded").value.trim(),
-        catatan: document.getElementById("deposit-note").value.trim()
+        catatan: document.getElementById("deposit-note").value.trim(),
+        tahapId: getSelectedTahapId()
       };
 
       sendCloudWrite("saveSetoran", payload).then(() => {

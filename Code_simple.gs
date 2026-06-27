@@ -132,10 +132,15 @@ function saveRequest(ss, request) {
   var activeTahapId = getActiveTahapId(ss);
 
   if (action === "saveTahap") {
-    upsertRow(ss.getSheetByName("Tahap"), safeString(data.id) || generateId("t"), [
-      safeString(data.id) || generateId("t"),
+    var tahapId = safeString(data.id) || generateId("t");
+    var tahapStatus = safeString(data.status || "Aktif");
+    if (tahapStatus === "Aktif") {
+      deactivateOtherTahaps(ss.getSheetByName("Tahap"), tahapId, now);
+    }
+    upsertRow(ss.getSheetByName("Tahap"), tahapId, [
+      tahapId,
       safeString(data.nama || data.name),
-      safeString(data.status || "Aktif"),
+      tahapStatus,
       now
     ], 1);
   }
@@ -203,6 +208,19 @@ function upsertRow(sheet, id, values, idColumn) {
     sheet.appendRow(values);
   } else {
     sheet.getRange(row, 1, 1, values.length).setValues([values]);
+  }
+}
+
+function deactivateOtherTahaps(sheet, activeTahapId, now) {
+  if (!sheet) return;
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return;
+  var values = sheet.getRange(2, 1, lastRow - 1, 4).getValues();
+  for (var i = 0; i < values.length; i++) {
+    if (safeString(values[i][0]) && safeString(values[i][0]) !== safeString(activeTahapId) && safeString(values[i][2]) === "Aktif") {
+      sheet.getRange(i + 2, 3).setValue("Nonaktif");
+      sheet.getRange(i + 2, 4).setValue(now);
+    }
   }
 }
 
