@@ -699,7 +699,7 @@
     // =========================================================================
     // CONFIGURASI UTAMA DEPLOYMENT (PENTING!)
     // =========================================================================
-    const APP_VERSION = "qurbanku-2026-06-27-pagination-setoran-v10";
+    const APP_VERSION = "qurbanku-2026-06-27-datepicker-setoran-v12";
     // Ubah IS_PREVIEW ke false jika Anda akan mem-publish aplikasi ke Blogger Live.
     const IS_PREVIEW = false; 
     const DEFAULT_GAS_URL = "https://script.google.com/macros/s/AKfycbwbmHjkY5cAlZEhKwn33m1mrIMOqLLp9bFHJO3wX7w0OKCLK1X4RaXXhWu6HwUKbnm0/exec";
@@ -1699,7 +1699,7 @@
         tr.className = "hover:bg-slate-50/50 transition";
         tr.innerHTML = `
           <td class="p-4 pl-6 text-center font-bold text-slate-500 text-xs">${startIndex + index + 1}</td>
-          <td class="p-4 font-semibold text-slate-500 text-xs">${d.tanggal}</td>
+          <td class="p-4 font-semibold text-slate-500 text-xs">${formatDepositDate(d.tanggal)}</td>
           <td class="p-4 font-bold text-slate-800 text-xs">${owner ? owner.nama : "Tidak Diketahui"}</td>
           <td class="p-4 font-semibold text-slate-700 text-xs">Bulan Ke-${d.bulan}</td>
           <td class="p-4 text-emerald-800 font-extrabold text-xs">${formatRupiah(d.jumlah)}</td>
@@ -1783,6 +1783,28 @@
       const month = String(date.getMonth() + 1).padStart(2, "0");
       const year = String(date.getFullYear());
       return `${day}/${month}/${year}`;
+    }
+
+    function formatDateDashId(date) {
+      if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "";
+      const day = String(date.getDate()).padStart(2, "0");
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const year = String(date.getFullYear());
+      return `${day}-${month}-${year}`;
+    }
+
+    function formatDepositDate(value) {
+      const date = parseDepositDate(value);
+      return date ? formatDateDashId(date) : String(value || "");
+    }
+
+    function toDateInputValue(value) {
+      const date = parseDepositDate(value);
+      if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "";
+      const day = String(date.getDate()).padStart(2, "0");
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const year = String(date.getFullYear());
+      return `${year}-${month}-${day}`;
     }
 
     function getRekapMonthDate(month) {
@@ -2240,7 +2262,7 @@
       document.getElementById("setoran-modal-title").innerText = "Input Setoran Tabungan";
       document.getElementById("edit-deposit-id").value = "";
       document.getElementById("deposit-participant").value = "";
-      document.getElementById("deposit-date").value = new Date().toISOString().substring(0, 10);
+      document.getElementById("deposit-date").value = toDateInputValue(new Date());
       document.getElementById("deposit-amount").value = "";
       document.getElementById("deposit-recorded").value = appState.user.data.nama;
       document.getElementById("deposit-note").value = "";
@@ -2256,7 +2278,7 @@
       document.getElementById("setoran-modal-title").innerText = "Edit Setoran Tabungan";
       document.getElementById("edit-deposit-id").value = d.id;
       document.getElementById("deposit-participant").value = d.anggota_id;
-      document.getElementById("deposit-date").value = d.tanggal;
+      document.getElementById("deposit-date").value = toDateInputValue(d.tanggal);
       document.getElementById("deposit-amount").value = formatNumberGroup(d.jumlah);
       document.getElementById("deposit-bulan").value = d.bulan;
       document.getElementById("deposit-recorded").value = d.recorded_by;
@@ -2270,7 +2292,7 @@
       const payload = {
         id: id || "",
         anggota_id: document.getElementById("deposit-participant").value,
-        tanggal: document.getElementById("deposit-date").value,
+        tanggal: formatDepositDate(document.getElementById("deposit-date").value),
         jumlah: parseMoneyInput(document.getElementById("deposit-amount").value),
         bulan: Number(document.getElementById("deposit-bulan").value),
         recorded_by: document.getElementById("deposit-recorded").value.trim(),
