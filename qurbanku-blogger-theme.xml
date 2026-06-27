@@ -682,7 +682,7 @@
     // =========================================================================
     // CONFIGURASI UTAMA DEPLOYMENT (PENTING!)
     // =========================================================================
-    const APP_VERSION = "qurbanku-2026-06-27-rekap-nomor-tahun-v6";
+    const APP_VERSION = "qurbanku-2026-06-27-rekap-tanggal-setoran-v7";
     // Ubah IS_PREVIEW ke false jika Anda akan mem-publish aplikasi ke Blogger Live.
     const IS_PREVIEW = false; 
     const DEFAULT_GAS_URL = "https://script.google.com/macros/s/AKfycbwbmHjkY5cAlZEhKwn33m1mrIMOqLLp9bFHJO3wX7w0OKCLK1X4RaXXhWu6HwUKbnm0/exec";
@@ -1523,34 +1523,40 @@
     }
 
     // --- REKAP MATRIX RENDERING (BULAN 1 - 12) ---
-    function getGatheringDate(month) {
-      const dates = appState.settings.gatheringDates || [];
-      return dates[month - 1] || "";
-    }
-
-    function getActiveRekapYear() {
-      const activeStage = appState.data.tahap.find(t => t.status === "Aktif")?.nama || "";
-      const stageYear = activeStage.match(/\b(20\d{2})\b/);
-      if (stageYear) return stageYear[1];
-
-      const depositWithYear = appState.data.setoran.find(d => /\b20\d{2}\b/.test(String(d.tanggal || "")));
-      const depositYear = String(depositWithYear?.tanggal || "").match(/\b(20\d{2})\b/);
-      return depositYear ? depositYear[1] : String(new Date().getFullYear());
-    }
-
-    function formatGatheringDateWithYear(month) {
-      const rawDate = String(getGatheringDate(month) || "").trim();
+    function parseDepositDate(value) {
+      const rawDate = String(value || "").trim();
       if (!rawDate) return "";
 
       const isoDate = rawDate.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-      if (isoDate) return `${isoDate[3].padStart(2, "0")}/${isoDate[2].padStart(2, "0")}/${isoDate[1]}`;
+      if (isoDate) {
+        return new Date(Number(isoDate[1]), Number(isoDate[2]) - 1, Number(isoDate[3]));
+      }
 
-      if (/\b\d{4}\b/.test(rawDate)) return rawDate;
+      const dayMonthYear = rawDate.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
+      if (dayMonthYear) {
+        return new Date(Number(dayMonthYear[3]), Number(dayMonthYear[2]) - 1, Number(dayMonthYear[1]));
+      }
 
-      const dayMonth = rawDate.match(/^(\d{1,2})[\/\-.](\d{1,2})$/);
-      if (dayMonth) return `${dayMonth[1].padStart(2, "0")}/${dayMonth[2].padStart(2, "0")}/${getActiveRekapYear()}`;
+      const parsedDate = new Date(rawDate);
+      return Number.isNaN(parsedDate.getTime()) ? "" : parsedDate;
+    }
 
-      return `${rawDate} ${getActiveRekapYear()}`;
+    function formatDateShortId(date) {
+      if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "";
+      const day = String(date.getDate()).padStart(2, "0");
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const year = String(date.getFullYear());
+      return `${day}/${month}/${year}`;
+    }
+
+    function getRekapMonthDate(month) {
+      const dates = appState.data.setoran
+        .filter(d => Number(d.bulan) === month)
+        .map(d => parseDepositDate(d.tanggal))
+        .filter(date => date instanceof Date && !Number.isNaN(date.getTime()))
+        .sort((a, b) => a - b);
+
+      return dates.length ? formatDateShortId(dates[0]) : "";
     }
 
     function escapeHtml(value) {
@@ -1567,7 +1573,7 @@
       if (!thead) return;
       const monthHeaders = Array.from({ length: 12 }, (_, i) => {
         const month = i + 1;
-        const date = formatGatheringDateWithYear(month);
+        const date = getRekapMonthDate(month);
         return `
           <th class="p-2 border-r border-slate-100 align-middle">
             <span class="block text-[11px] font-extrabold text-slate-700">B${month}</span>
@@ -1644,7 +1650,7 @@
       const nominalArisan = Number(appState.settings.monthlyInstallment || 150000);
       const headerCells = Array.from({ length: 12 }, (_, i) => {
         const month = i + 1;
-        const date = formatGatheringDateWithYear(month);
+        const date = getRekapMonthDate(month);
         return `<th><span>B${month}</span><small>${date ? escapeHtml(date) : "-"}</small></th>`;
       }).join("");
       const bodyRows = rows.map(row => {
@@ -1705,7 +1711,7 @@
       const rows = getRekapRows();
       const headerCells = Array.from({ length: 12 }, (_, i) => {
         const month = i + 1;
-        const date = formatGatheringDateWithYear(month);
+        const date = getRekapMonthDate(month);
         return `<th>B${month}${date ? " (" + escapeHtml(date) + ")" : ""}</th>`;
       }).join("");
       const bodyRows = rows.map(row => {

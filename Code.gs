@@ -230,7 +230,7 @@ function setupDatabase() {
     ensureSetting_(ss, "bendaharaName", "Sudarlim");
     ensureSetting_(ss, "monthlyInstallment", "150000");
     ensureSetting_(ss, "cloudUrl", "");
-    ensureSetting_(ss, "gatheringDates", JSON.stringify(["13/11", "19/12", "23/01", "03/04", "07/05", "11/06", "", "", "", "", "", ""]));
+    ensureSetting_(ss, "gatheringDates", JSON.stringify([]));
     ensureSetting_(ss, "lastUpdated", "0");
 
     SpreadsheetApp.flush();
@@ -639,7 +639,7 @@ function parsePengaturan(sheet) {
     bendaharaName: "",
     monthlyInstallment: 150000,
     cloudUrl: "",
-    gatheringDates: ["13/11", "19/12", "23/01", "03/04", "07/05", "11/06", "", "", "", "", "", ""],
+    gatheringDates: [],
     lastUpdated: 0
   };
   if (!sheet) return settings;
