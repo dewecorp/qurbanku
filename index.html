@@ -567,7 +567,7 @@
                     <span class='absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400'>
                       <i class='w-4 h-4' data-lucide='search'></i>
                     </span>
-                    <input class='w-full pl-9 pr-4 py-2 text-xs rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition text-slate-700 bg-white shadow-xs' id='deposit-search' oninput='renderDeposits()' placeholder='Cari transaksi...' type='text'/>
+                    <input class='w-full pl-9 pr-4 py-2 text-xs rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition text-slate-700 bg-white shadow-xs' id='deposit-search' oninput='resetDepositPagination()' placeholder='Cari transaksi...' type='text'/>
                   </div>
                   <button class='bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-2 rounded-xl transition flex items-center gap-1.5 shadow-md shadow-emerald-500/10' onclick='openAddDeposit()'>
                     <i class='w-3.5 h-3.5' data-lucide='plus'></i> Catat Setoran
@@ -590,6 +590,22 @@
                   </thead>
                   <tbody class='divide-y divide-slate-100' id='deposit-table-body'></tbody>
                 </table>
+              </div>
+              <div class='mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-t border-slate-100 pt-4'>
+                <div class='flex items-center gap-2 text-xs text-slate-500'>
+                  <span class='font-semibold'>Tampilkan</span>
+                  <select class='px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10' id='deposit-page-size' onchange='changeDepositPageSize(this.value)'>
+                    <option value='10'>10</option>
+                    <option value='25'>25</option>
+                    <option value='50'>50</option>
+                    <option value='100'>100</option>
+                  </select>
+                  <span class='font-semibold'>data</span>
+                </div>
+                <div class='flex flex-col sm:flex-row sm:items-center gap-3'>
+                  <span class='text-[11px] font-semibold text-slate-500' id='deposit-page-info'>Menampilkan 0 data</span>
+                  <div class='flex items-center gap-1.5' id='deposit-pagination-controls'></div>
+                </div>
               </div>
             </div>
           </section>
@@ -683,7 +699,7 @@
     // =========================================================================
     // CONFIGURASI UTAMA DEPLOYMENT (PENTING!)
     // =========================================================================
-    const APP_VERSION = "qurbanku-2026-06-27-nominal-setoran-v9";
+    const APP_VERSION = "qurbanku-2026-06-27-pagination-setoran-v10";
     // Ubah IS_PREVIEW ke false jika Anda akan mem-publish aplikasi ke Blogger Live.
     const IS_PREVIEW = false; 
     const DEFAULT_GAS_URL = "https://script.google.com/macros/s/AKfycbwbmHjkY5cAlZEhKwn33m1mrIMOqLLp9bFHJO3wX7w0OKCLK1X4RaXXhWu6HwUKbnm0/exec";
@@ -728,6 +744,8 @@
       user: null, // Berisi object user yang login {role: 'admin'|'shohibul', data: userObj}
       currentTab: "dashboard",
       activeLoginTab: "admin",
+      depositPage: 1,
+      depositPageSize: 10,
       settings: {},
       data: {
         tahap: [],
@@ -1638,7 +1656,11 @@
     function renderDeposits() {
       const query = document.getElementById("deposit-search").value.toLowerCase();
       const tbody = document.getElementById("deposit-table-body");
+      const pageSizeSelect = document.getElementById("deposit-page-size");
       tbody.innerHTML = "";
+      if (pageSizeSelect && Number(pageSizeSelect.value) !== appState.depositPageSize) {
+        pageSizeSelect.value = String(appState.depositPageSize);
+      }
       
       // Filter transaksi
       const filtered = appState.data.setoran.filter(d => {
@@ -1659,12 +1681,24 @@
         return Number(b.bulan || 0) - Number(a.bulan || 0);
       });
 
-      filtered.forEach((d, index) => {
+      const totalRows = filtered.length;
+      const totalPages = Math.max(1, Math.ceil(totalRows / appState.depositPageSize));
+      appState.depositPage = Math.min(Math.max(1, appState.depositPage), totalPages);
+      const startIndex = (appState.depositPage - 1) * appState.depositPageSize;
+      const pageRows = filtered.slice(startIndex, startIndex + appState.depositPageSize);
+
+      if (pageRows.length === 0) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td class="p-6 text-center text-xs text-slate-400 font-semibold" colspan="8">Tidak ada data setoran yang cocok.</td>`;
+        tbody.appendChild(tr);
+      }
+
+      pageRows.forEach((d, index) => {
         const owner = appState.data.anggota.find(a => a.id === d.anggota_id);
         const tr = document.createElement("tr");
         tr.className = "hover:bg-slate-50/50 transition";
         tr.innerHTML = `
-          <td class="p-4 pl-6 text-center font-bold text-slate-500 text-xs">${index + 1}</td>
+          <td class="p-4 pl-6 text-center font-bold text-slate-500 text-xs">${startIndex + index + 1}</td>
           <td class="p-4 font-semibold text-slate-500 text-xs">${d.tanggal}</td>
           <td class="p-4 font-bold text-slate-800 text-xs">${owner ? owner.nama : "Tidak Diketahui"}</td>
           <td class="p-4 font-semibold text-slate-700 text-xs">Bulan Ke-${d.bulan}</td>
@@ -1678,6 +1712,50 @@
         `;
         tbody.appendChild(tr);
       });
+
+      renderDepositPagination(totalRows, totalPages, startIndex, pageRows.length);
+    }
+
+    function resetDepositPagination() {
+      appState.depositPage = 1;
+      renderDeposits();
+    }
+
+    function changeDepositPageSize(value) {
+      appState.depositPageSize = Number(value) || 10;
+      appState.depositPage = 1;
+      renderDeposits();
+    }
+
+    function goToDepositPage(page) {
+      appState.depositPage = page;
+      renderDeposits();
+    }
+
+    function renderDepositPagination(totalRows, totalPages, startIndex, currentCount) {
+      const info = document.getElementById("deposit-page-info");
+      const controls = document.getElementById("deposit-pagination-controls");
+      if (!info || !controls) return;
+
+      if (totalRows === 0) {
+        info.innerText = "Menampilkan 0 data";
+      } else {
+        info.innerText = `Menampilkan ${startIndex + 1}-${startIndex + currentCount} dari ${totalRows} data`;
+      }
+
+      const buttonBase = "h-9 min-w-9 px-3 rounded-xl border text-xs font-bold transition";
+      const disabledPrev = appState.depositPage <= 1;
+      const disabledNext = appState.depositPage >= totalPages;
+      const pages = [];
+      const firstPage = Math.max(1, appState.depositPage - 2);
+      const lastPage = Math.min(totalPages, appState.depositPage + 2);
+      for (let page = firstPage; page <= lastPage; page++) pages.push(page);
+
+      controls.innerHTML = `
+        <button class="${buttonBase} ${disabledPrev ? "border-slate-100 text-slate-300 cursor-not-allowed" : "border-slate-200 text-slate-600 hover:border-emerald-300 hover:text-emerald-700"}" ${disabledPrev ? "disabled" : ""} onclick="goToDepositPage(${appState.depositPage - 1})" type="button">Prev</button>
+        ${pages.map(page => `<button class="${buttonBase} ${page === appState.depositPage ? "border-emerald-600 bg-emerald-600 text-white" : "border-slate-200 text-slate-600 hover:border-emerald-300 hover:text-emerald-700"}" onclick="goToDepositPage(${page})" type="button">${page}</button>`).join("")}
+        <button class="${buttonBase} ${disabledNext ? "border-slate-100 text-slate-300 cursor-not-allowed" : "border-slate-200 text-slate-600 hover:border-emerald-300 hover:text-emerald-700"}" ${disabledNext ? "disabled" : ""} onclick="goToDepositPage(${appState.depositPage + 1})" type="button">Next</button>
+      `;
     }
 
     // --- REKAP MATRIX RENDERING (BULAN 1 - 12) ---
