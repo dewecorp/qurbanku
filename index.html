@@ -682,7 +682,7 @@
     // =========================================================================
     // CONFIGURASI UTAMA DEPLOYMENT (PENTING!)
     // =========================================================================
-    const APP_VERSION = "qurbanku-2026-06-27-rekap-tanggal-setoran-v7";
+    const APP_VERSION = "qurbanku-2026-06-27-dashboard-anggota-v8";
     // Ubah IS_PREVIEW ke false jika Anda akan mem-publish aplikasi ke Blogger Live.
     const IS_PREVIEW = false; 
     const DEFAULT_GAS_URL = "https://script.google.com/macros/s/AKfycbwbmHjkY5cAlZEhKwn33m1mrIMOqLLp9bFHJO3wX7w0OKCLK1X4RaXXhWu6HwUKbnm0/exec";
@@ -1086,6 +1086,7 @@
       } else {
         rootEl.classList.remove("role-shohibul");
       }
+      updateRoleNavigation();
 
       // Sembunyikan form login, tampilkan dashboard
       document.getElementById("login-screen").classList.add("hidden");
@@ -1105,6 +1106,7 @@
     function handleLogout() {
       showConfirm("Konfirmasi Keluar", "Apakah Anda yakin ingin keluar dari sistem?", () => {
         appState.user = null;
+        document.getElementById("qurbanku-app-root").classList.remove("role-shohibul");
         document.getElementById("login-screen").classList.remove("hidden");
         document.getElementById("main-app-layout").classList.add("hidden");
         showToast("Sesi login Anda telah berakhir.", "info");
@@ -1114,7 +1116,26 @@
     // =========================================================================
     // VIEW CONTROLLER & TAB SWITCHING
     // =========================================================================
+    function isShohibulSession() {
+      return appState.user && appState.user.role === "shohibul";
+    }
+
+    function getAllowedTabs() {
+      return isShohibulSession() ? ["dashboard", "rekap"] : ["dashboard", "tahap", "kelompok", "anggota", "setoran", "rekap", "pengaturan"];
+    }
+
+    function updateRoleNavigation() {
+      const dashboardLabel = document.querySelector("#nav-dashboard span");
+      const rekapLabel = document.querySelector("#nav-rekap span");
+      if (dashboardLabel) dashboardLabel.innerText = isShohibulSession() ? "Dashboard Anggota" : "Dashboard Utama";
+      if (rekapLabel) rekapLabel.innerText = isShohibulSession() ? "Rekap Setoran Saya" : "Rekapitulasi Tabungan";
+    }
+
     function switchTab(tabId) {
+      const allowedTabs = getAllowedTabs();
+      if (!allowedTabs.includes(tabId)) {
+        tabId = "dashboard";
+      }
       appState.currentTab = tabId;
       
       // Dapatkan semua seksi tab
@@ -1129,21 +1150,23 @@
         // Atur status aktif pada tombol navigasi sidebar
         const navBtn = document.getElementById(`nav-${t}`);
         if (navBtn) {
+          const adminClass = ["tahap", "kelompok", "anggota", "setoran", "pengaturan"].includes(t) ? " admin-only" : "";
           if (t === tabId) {
-            navBtn.className = "flex items-center gap-3.5 px-4 py-3 rounded-xl text-xs font-semibold transition bg-emerald-800 text-white w-full";
+            navBtn.className = `flex items-center gap-3.5 px-4 py-3 rounded-xl text-xs font-semibold transition bg-emerald-800 text-white w-full${adminClass}`;
           } else {
-            navBtn.className = "flex items-center gap-3.5 px-4 py-3 rounded-xl text-xs font-semibold transition text-emerald-100 hover:bg-emerald-900/50 w-full";
+            navBtn.className = `flex items-center gap-3.5 px-4 py-3 rounded-xl text-xs font-semibold transition text-emerald-100 hover:bg-emerald-900/50 w-full${adminClass}`;
           }
         }
       });
+      updateRoleNavigation();
 
       // Update Header Text
       const titleEl = document.getElementById("header-title");
       const subtitleEl = document.getElementById("header-subtitle");
       
       if (tabId === "dashboard") {
-        titleEl.innerText = "Dashboard Utama";
-        subtitleEl.innerText = "Ringkasan Arisan & Qurban";
+        titleEl.innerText = isShohibulSession() ? "Dashboard Anggota" : "Dashboard Utama";
+        subtitleEl.innerText = isShohibulSession() ? "Ringkasan Tabungan Pribadi" : "Ringkasan Arisan & Qurban";
       } else if (tabId === "tahap") {
         titleEl.innerText = "Periode Qurban";
         subtitleEl.innerText = "Manajemen Arisan Aktif";
@@ -1157,8 +1180,8 @@
         titleEl.innerText = "Mutasi Tabungan";
         subtitleEl.innerText = "Catatan Transaksi Keuangan";
       } else if (tabId === "rekap") {
-        titleEl.innerText = "Buku Rekapitulasi";
-        subtitleEl.innerText = "Arsip Pembayaran Tabungan";
+        titleEl.innerText = isShohibulSession() ? "Rekap Setoran Saya" : "Buku Rekapitulasi";
+        subtitleEl.innerText = isShohibulSession() ? "Riwayat Pembayaran Pribadi" : "Arsip Pembayaran Tabungan";
       } else if (tabId === "pengaturan") {
         titleEl.innerText = "Integrasi Cloud";
         subtitleEl.innerText = "Konfigurasi Google Sheets";
@@ -1279,9 +1302,123 @@
         .reduce((sum, d) => sum + Number(d.jumlah), 0);
     }
 
+    function getParticipantDeposits(anggotaId) {
+      return appState.data.setoran
+        .filter(d => d.anggota_id === anggotaId)
+        .sort((a, b) => Number(a.bulan) - Number(b.bulan) || parseDepositDate(a.tanggal) - parseDepositDate(b.tanggal));
+    }
+
+    function getLatestActiveMonth() {
+      return Math.max(0, ...appState.data.setoran.map(d => Number(d.bulan) || 0));
+    }
+
+    function renderMemberDashboard() {
+      const containerStats = document.getElementById("dashboard-stats");
+      const containerGroups = document.getElementById("dashboard-group-progress");
+      const personalBox = document.getElementById("personal-status-box");
+      const cardDetails = document.getElementById("personal-card-details");
+      const sectionTitle = document.querySelector("#tab-dashboard h3");
+
+      const member = appState.user.data;
+      const group = appState.data.kelompok.find(g => g.id === member.kelompok_id);
+      const activeStage = appState.data.tahap.find(t => t.status === "Aktif")?.nama || "Tahap Aktif";
+      const deposits = getParticipantDeposits(member.id);
+      const totalPaid = deposits.reduce((sum, d) => sum + Number(d.jumlah || 0), 0);
+      const paidMonths = new Set(deposits.map(d => Number(d.bulan))).size;
+      const latestMonth = getLatestActiveMonth();
+      const dueMonths = Math.max(0, latestMonth - paidMonths);
+      const monthlyInstallment = Number(appState.settings.monthlyInstallment || 150000);
+      const target = Number(member.target_saving || group?.target || monthlyInstallment * 12 || 0);
+      const progress = target > 0 ? Math.min(Math.round((totalPaid / target) * 100), 100) : 0;
+      const groupType = group ? group.tipe : "Mandiri";
+      const latestDeposit = deposits[deposits.length - 1];
+
+      containerStats.innerHTML = `
+        <div class="relative overflow-hidden bg-gradient-to-br from-emerald-600 via-emerald-700 to-teal-800 text-white p-5 rounded-2xl shadow-sm space-y-3">
+          <div class="absolute -right-8 -top-8 w-28 h-28 rounded-full bg-white/10"></div>
+          <span class="text-[10px] text-emerald-100 font-bold uppercase tracking-wider">Jumlah Setoran Anda</span>
+          <h4 class="text-2xl font-extrabold relative">${formatRupiah(totalPaid)}</h4>
+          <p class="text-[10px] text-emerald-50 flex items-center gap-1.5 relative"><i class="fa-solid fa-circle-check"></i> ${paidMonths} dari 12 bulan tercatat</p>
+        </div>
+        <div class="bg-white p-5 rounded-2xl border border-rose-100 shadow-xs space-y-3">
+          <span class="text-[10px] text-rose-400 font-bold uppercase tracking-wider">Tunggakan Sampai Bulan Aktif</span>
+          <h4 class="text-2xl font-extrabold ${dueMonths > 0 ? "text-rose-600" : "text-emerald-700"}">${dueMonths} Bulan</h4>
+          <p class="text-[10px] text-slate-500 flex items-center gap-1.5"><i class="fa-solid fa-wallet"></i> ${formatRupiah(dueMonths * monthlyInstallment)}</p>
+        </div>
+        <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-3">
+          <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Jenis Kelompok</span>
+          <h4 class="text-xl font-extrabold text-slate-900 truncate" title="${group ? group.nama : "Mandiri"}">${groupType}</h4>
+          <p class="text-[10px] text-slate-500 flex items-center gap-1.5"><i class="fa-solid fa-people-group"></i> ${group ? group.nama : "Belum masuk kelompok"}</p>
+        </div>
+        <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-3">
+          <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Tahap Ke / Periode</span>
+          <h4 class="text-sm font-extrabold text-emerald-700 truncate" title="${activeStage}">${activeStage}</h4>
+          <p class="text-[10px] text-slate-500 flex items-center gap-1.5"><i class="fa-solid fa-calendar-days"></i> Bulan aktif B${latestMonth || "-"}</p>
+        </div>
+      `;
+
+      if (sectionTitle) {
+        sectionTitle.innerHTML = `<i class="fa-solid fa-sparkles text-emerald-600"></i> Ringkasan Tabungan ${member.nama}`;
+      }
+
+      const recentRows = deposits.slice(-6).reverse().map(d => `
+        <div class="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-white px-4 py-3">
+          <div>
+            <p class="text-xs font-extrabold text-slate-900">B${Number(d.bulan) || "-"} - ${formatDateShortId(parseDepositDate(d.tanggal)) || d.tanggal || "Tanpa tanggal"}</p>
+            <p class="text-[10px] text-slate-400 font-semibold">Dicatat oleh ${d.recorded_by || "Pengurus"}</p>
+          </div>
+          <span class="text-xs font-extrabold text-emerald-700 whitespace-nowrap">${formatRupiah(Number(d.jumlah || 0))}</span>
+        </div>
+      `).join("");
+
+      containerGroups.innerHTML = `
+        <div class="md:col-span-2 rounded-2xl border border-emerald-100 bg-gradient-to-br from-white to-emerald-50/70 p-5 space-y-5">
+          <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+            <div>
+              <p class="text-[10px] uppercase tracking-wider font-bold text-emerald-600">Progress Personal</p>
+              <h4 class="text-lg font-extrabold text-slate-950">${member.nama}</h4>
+              <p class="text-xs text-slate-500 mt-1">${group ? group.nama : "Mandiri"} - ${groupType}</p>
+            </div>
+            <div class="px-3 py-2 rounded-xl bg-white border border-emerald-100 text-right">
+              <p class="text-[10px] font-bold uppercase text-slate-400">Setoran Terakhir</p>
+              <p class="text-xs font-extrabold text-slate-900">${latestDeposit ? `B${latestDeposit.bulan}` : "Belum ada"}</p>
+            </div>
+          </div>
+          <div class="space-y-2">
+            <div class="flex justify-between text-[11px] font-bold text-slate-500">
+              <span>${formatRupiah(totalPaid)}</span>
+              <span>${progress}% dari target ${formatRupiah(target)}</span>
+            </div>
+            <div class="h-3 w-full overflow-hidden rounded-full bg-emerald-100">
+              <div class="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-500" style="width:${progress}%"></div>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div class="rounded-xl bg-white border border-slate-100 p-3"><p class="text-[10px] text-slate-400 font-bold uppercase">Target</p><p class="text-xs font-extrabold text-slate-900">${formatRupiah(target)}</p></div>
+            <div class="rounded-xl bg-white border border-slate-100 p-3"><p class="text-[10px] text-slate-400 font-bold uppercase">Bulanan</p><p class="text-xs font-extrabold text-slate-900">${formatRupiah(monthlyInstallment)}</p></div>
+            <div class="rounded-xl bg-white border border-slate-100 p-3"><p class="text-[10px] text-slate-400 font-bold uppercase">Terbayar</p><p class="text-xs font-extrabold text-slate-900">${paidMonths} Bulan</p></div>
+            <div class="rounded-xl bg-white border border-slate-100 p-3"><p class="text-[10px] text-slate-400 font-bold uppercase">Tunggakan</p><p class="text-xs font-extrabold ${dueMonths > 0 ? "text-rose-600" : "text-emerald-700"}">${dueMonths} Bulan</p></div>
+          </div>
+        </div>
+      `;
+
+      cardDetails.innerHTML = recentRows || `<div class="text-center py-8"><p class="text-xs font-bold text-slate-700">Belum ada setoran tercatat</p><p class="text-[10px] text-slate-400 mt-1">Setoran yang dicatat pengurus akan muncul di sini.</p></div>`;
+      personalBox.classList.remove("hidden");
+      personalBox.querySelector("h3").innerHTML = `<i class="fa-solid fa-receipt text-emerald-600"></i> Riwayat Setoran Terbaru`;
+    }
+
     // --- DASHBOARD RENDERING ---
     function renderDashboard() {
+      if (isShohibulSession()) {
+        renderMemberDashboard();
+        return;
+      }
+
       const containerStats = document.getElementById("dashboard-stats");
+      const sectionTitle = document.querySelector("#tab-dashboard h3");
+      const personalTitle = document.querySelector("#personal-status-box h3");
+      if (sectionTitle) sectionTitle.innerHTML = `<i class="fa-solid fa-kaaba text-emerald-600"></i> Kemajuan Kelompok Tahap Aktif`;
+      if (personalTitle) personalTitle.innerHTML = `<i class="fa-solid fa-chart-line text-emerald-600"></i> Status Tabungan Anda`;
       
       // Hitung total tabungan terkumpul global
       const totalSakuGlobal = appState.data.setoran.reduce((sum, d) => sum + Number(d.jumlah), 0);
@@ -1357,7 +1494,7 @@
       const personalBox = document.getElementById("personal-status-box");
       const cardDetails = document.getElementById("personal-card-details");
       
-      if (appState.user.role === "shohibul") {
+      if (isShohibulSession()) {
         const uObj = appState.user.data;
         const group = appState.data.kelompok.find(g => g.id === uObj.kelompok_id);
         const myTerkumpul = getParticipantTotalSaving(uObj.id);
@@ -1601,7 +1738,10 @@
       const tbody = document.getElementById("rekap-table-body");
       tbody.innerHTML = "";
 
-      const sortedAnggota = sortByNameAsc(appState.data.anggota);
+      const sourceAnggota = isShohibulSession()
+        ? appState.data.anggota.filter(a => a.id === appState.user.data.id)
+        : appState.data.anggota;
+      const sortedAnggota = sortByNameAsc(sourceAnggota);
 
       sortedAnggota.forEach((a, index) => {
         const tr = document.createElement("tr");
@@ -1627,7 +1767,11 @@
     }
 
     function getRekapRows() {
-      return sortByNameAsc(appState.data.anggota)
+      const sourceAnggota = isShohibulSession()
+        ? appState.data.anggota.filter(a => a.id === appState.user.data.id)
+        : appState.data.anggota;
+
+      return sortByNameAsc(sourceAnggota)
         .map((anggota, index) => {
           const depositsByMonth = {};
           let total = 0;
