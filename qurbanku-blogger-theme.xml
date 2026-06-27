@@ -710,10 +710,10 @@
     const APP_VERSION = "qurbanku-2026-06-27-filter-tahap-v14";
     // Ubah IS_PREVIEW ke false jika Anda akan mem-publish aplikasi ke Blogger Live.
     const IS_PREVIEW = false; 
-    const DEFAULT_GAS_URL = "https://script.google.com/macros/s/AKfycbwbmHjkY5cAlZEhKwn33m1mrIMOqLLp9bFHJO3wX7w0OKCLK1X4RaXXhWu6HwUKbnm0/exec";
+    const DEFAULT_GAS_URL = "https://script.google.com/macros/s/AKfycbxGo1kDE8VvlgAXpDZ1T-D4JJ3gUoIqfDDU6a6idI-iGjdYAdfcxqZqMerFnXIiRgyN/exec";
     const BOOTSTRAP_GAS_URLS = [
       DEFAULT_GAS_URL,
-      "https://script.google.com/macros/s/AKfycbwbmHjkY5cAlZEhKwn33m1mrIMOqLLp9bFHJO3wX7w0OKCLK1X4RaXXhWu6HwUKbnm0/exec"
+      "https://script.google.com/macros/s/AKfycbxGo1kDE8VvlgAXpDZ1T-D4JJ3gUoIqfDDU6a6idI-iGjdYAdfcxqZqMerFnXIiRgyN/exec"
     ];
     let activeGasUrl = localStorage.getItem("qurbankuGasUrl") || BOOTSTRAP_GAS_URLS[0] || "";
 
