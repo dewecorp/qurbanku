@@ -707,7 +707,7 @@
     // =========================================================================
     // CONFIGURASI UTAMA DEPLOYMENT (PENTING!)
     // =========================================================================
-    const APP_VERSION = "qurbanku-2026-06-28-tanggal-setoran-v15";
+    const APP_VERSION = "qurbanku-2026-06-28-dashboard-total-semua-tahap-v16";
     // Ubah IS_PREVIEW ke false jika Anda akan mem-publish aplikasi ke Blogger Live.
     const IS_PREVIEW = false; 
     const DEFAULT_GAS_URL = "https://script.google.com/macros/s/AKfycbwbmHjkY5cAlZEhKwn33m1mrIMOqLLp9bFHJO3wX7w0OKCLK1X4RaXXhWu6HwUKbnm0/exec";
@@ -1401,6 +1401,12 @@
         .reduce((sum, d) => sum + Number(d.jumlah), 0);
     }
 
+    function getParticipantTotalSavingAllStages(anggotaId) {
+      return appState.data.setoran
+        .filter(d => d.anggota_id === anggotaId)
+        .reduce((sum, d) => sum + Number(d.jumlah || 0), 0);
+    }
+
     function getParticipantDeposits(anggotaId) {
       return getSelectedTahapDeposits()
         .filter(d => d.anggota_id === anggotaId)
@@ -1423,6 +1429,8 @@
       const activeStage = getSelectedTahapName();
       const deposits = getParticipantDeposits(member.id);
       const totalPaid = deposits.reduce((sum, d) => sum + Number(d.jumlah || 0), 0);
+      const totalAllStagesPaid = getParticipantTotalSavingAllStages(member.id);
+      const allStagePaidMonths = new Set(appState.data.setoran.filter(d => d.anggota_id === member.id).map(d => `${getRecordTahapId(d)}:${Number(d.bulan) || 0}`)).size;
       const paidMonths = new Set(deposits.map(d => Number(d.bulan))).size;
       const latestMonth = getLatestActiveMonth();
       const dueMonths = Math.max(0, latestMonth - paidMonths);
@@ -1435,9 +1443,9 @@
       containerStats.innerHTML = `
         <div class="relative overflow-hidden bg-gradient-to-br from-emerald-600 via-emerald-700 to-teal-800 text-white p-5 rounded-2xl shadow-sm space-y-3">
           <div class="absolute -right-8 -top-8 w-28 h-28 rounded-full bg-white/10"></div>
-          <span class="text-[10px] text-emerald-100 font-bold uppercase tracking-wider">Jumlah Setoran Anda</span>
-          <h4 class="text-2xl font-extrabold relative">${formatRupiah(totalPaid)}</h4>
-          <p class="text-[10px] text-emerald-50 flex items-center gap-1.5 relative"><i class="fa-solid fa-circle-check"></i> ${paidMonths} dari 12 bulan tercatat</p>
+          <span class="text-[10px] text-emerald-100 font-bold uppercase tracking-wider">Jumlah Setoran Semua Tahap</span>
+          <h4 class="text-2xl font-extrabold relative">${formatRupiah(totalAllStagesPaid)}</h4>
+          <p class="text-[10px] text-emerald-50 flex items-center gap-1.5 relative"><i class="fa-solid fa-circle-check"></i> ${allStagePaidMonths} bulan setoran tercatat</p>
         </div>
         <div class="bg-white p-5 rounded-2xl border border-rose-100 shadow-xs space-y-3">
           <span class="text-[10px] text-rose-400 font-bold uppercase tracking-wider">Tunggakan Sampai Bulan Aktif</span>
