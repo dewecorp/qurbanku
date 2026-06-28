@@ -707,7 +707,7 @@
     // =========================================================================
     // CONFIGURASI UTAMA DEPLOYMENT (PENTING!)
     // =========================================================================
-    const APP_VERSION = "qurbanku-2026-06-27-filter-tahap-v14";
+    const APP_VERSION = "qurbanku-2026-06-28-tanggal-setoran-v15";
     // Ubah IS_PREVIEW ke false jika Anda akan mem-publish aplikasi ke Blogger Live.
     const IS_PREVIEW = false; 
     const DEFAULT_GAS_URL = "https://script.google.com/macros/s/AKfycbwbmHjkY5cAlZEhKwn33m1mrIMOqLLp9bFHJO3wX7w0OKCLK1X4RaXXhWu6HwUKbnm0/exec";
@@ -1404,7 +1404,7 @@
     function getParticipantDeposits(anggotaId) {
       return getSelectedTahapDeposits()
         .filter(d => d.anggota_id === anggotaId)
-        .sort((a, b) => Number(a.bulan) - Number(b.bulan) || parseDepositDate(a.tanggal) - parseDepositDate(b.tanggal));
+        .sort((a, b) => Number(a.bulan) - Number(b.bulan) || parseDepositDate(a.tanggal, a.bulan) - parseDepositDate(b.tanggal, b.bulan));
     }
 
     function getLatestActiveMonth() {
@@ -1463,7 +1463,7 @@
       const recentRows = deposits.slice(-6).reverse().map(d => `
         <div class="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-white px-4 py-3">
           <div>
-            <p class="text-xs font-extrabold text-slate-900">B${Number(d.bulan) || "-"} - ${formatDateShortId(parseDepositDate(d.tanggal)) || d.tanggal || "Tanpa tanggal"}</p>
+            <p class="text-xs font-extrabold text-slate-900">B${Number(d.bulan) || "-"} - ${formatDateShortId(parseDepositDate(d.tanggal, d.bulan)) || d.tanggal || "Tanpa tanggal"}</p>
             <p class="text-[10px] text-slate-400 font-semibold">Dicatat oleh ${d.recorded_by || "Pengurus"}</p>
           </div>
           <span class="text-xs font-extrabold text-emerald-700 whitespace-nowrap">${formatRupiah(Number(d.jumlah || 0))}</span>
@@ -1733,7 +1733,7 @@
 
       // Data terbaru di atas: tanggal setor terbaru, lalu update terbaru, lalu bulan terbesar.
       filtered.sort((a, b) => {
-        const dateDiff = parseDepositDate(b.tanggal) - parseDepositDate(a.tanggal);
+        const dateDiff = parseDepositDate(b.tanggal, b.bulan) - parseDepositDate(a.tanggal, a.bulan);
         if (dateDiff !== 0) return dateDiff;
         const updateDiff = Number(b.updatedAt || 0) - Number(a.updatedAt || 0);
         if (updateDiff !== 0) return updateDiff;
@@ -1774,7 +1774,7 @@
         tr.className = "hover:bg-slate-50/50 transition";
         tr.innerHTML = `
           <td class="p-4 pl-6 text-center font-bold text-slate-500 text-xs">${row.no}</td>
-          <td class="p-4 font-semibold text-slate-500 text-xs">${formatDepositDate(d.tanggal)}</td>
+          <td class="p-4 font-semibold text-slate-500 text-xs">${formatDepositDate(d.tanggal, d.bulan)}</td>
           <td class="p-4 font-bold text-slate-800 text-xs">${row.owner ? row.owner.nama : "Tidak Diketahui"}</td>
           <td class="p-4 font-semibold text-slate-700 text-xs">Bulan Ke-${d.bulan}</td>
           <td class="p-4 text-emerald-800 font-extrabold text-xs">${formatRupiah(d.jumlah)}</td>
@@ -1796,7 +1796,7 @@
       const total = rows.reduce((sum, row) => sum + Number(row.deposit.jumlah || 0), 0);
       const bodyRows = rows.map(row => {
         const d = row.deposit;
-        return `<tr><td>${row.no}</td><td>${formatDepositDate(d.tanggal)}</td><td>${escapeHtml(row.owner ? row.owner.nama : "Tidak Diketahui")}</td><td>Bulan Ke-${Number(d.bulan) || ""}</td><td>${Number(d.jumlah || 0)}</td><td>${escapeHtml(d.recorded_by || "")}</td><td>${escapeHtml(d.catatan || "")}</td></tr>`;
+        return `<tr><td>${row.no}</td><td>${formatDepositDate(d.tanggal, d.bulan)}</td><td>${escapeHtml(row.owner ? row.owner.nama : "Tidak Diketahui")}</td><td>Bulan Ke-${Number(d.bulan) || ""}</td><td>${Number(d.jumlah || 0)}</td><td>${escapeHtml(d.recorded_by || "")}</td><td>${escapeHtml(d.catatan || "")}</td></tr>`;
       }).join("");
       const excelHtml = `<html><head><meta charset="UTF-8"></head><body><table border="1"><tr><th colspan="7">Data Catatan Setoran QurbanKu</th></tr><tr><th>No</th><th>Tanggal</th><th>Nama Shohibul</th><th>Bulan Pertemuan</th><th>Jumlah Setor</th><th>Penerima</th><th>Catatan</th></tr>${bodyRows}<tr><td colspan="4"><strong>Total</strong></td><td><strong>${total}</strong></td><td colspan="2"></td></tr></table></body></html>`;
       const blob = new Blob([excelHtml], { type: "application/vnd.ms-excel;charset=utf-8" });
@@ -1817,7 +1817,7 @@
       const total = rows.reduce((sum, row) => sum + Number(row.deposit.jumlah || 0), 0);
       const bodyRows = rows.map(row => {
         const d = row.deposit;
-        return `<tr><td class="num">${row.no}</td><td>${formatDepositDate(d.tanggal)}</td><td class="name">${escapeHtml(row.owner ? row.owner.nama : "Tidak Diketahui")}</td><td>B${Number(d.bulan) || ""}</td><td class="amount">${formatRupiah(Number(d.jumlah || 0))}</td><td>${escapeHtml(d.recorded_by || "")}</td><td class="note">${escapeHtml(d.catatan || "-")}</td></tr>`;
+        return `<tr><td class="num">${row.no}</td><td>${formatDepositDate(d.tanggal, d.bulan)}</td><td class="name">${escapeHtml(row.owner ? row.owner.nama : "Tidak Diketahui")}</td><td>B${Number(d.bulan) || ""}</td><td class="amount">${formatRupiah(Number(d.jumlah || 0))}</td><td>${escapeHtml(d.recorded_by || "")}</td><td class="note">${escapeHtml(d.catatan || "-")}</td></tr>`;
       }).join("");
 
       return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Data Setoran QurbanKu</title><style>
@@ -1903,22 +1903,34 @@
     }
 
     // --- REKAP MATRIX RENDERING (BULAN 1 - 12) ---
-    function parseDepositDate(value) {
+    function maybeCorrectDateByInstallmentMonth(date, installmentMonth) {
+      const expectedMonth = Number(installmentMonth || 0);
+      if (!(date instanceof Date) || Number.isNaN(date.getTime()) || expectedMonth < 1 || expectedMonth > 12) return date;
+
+      const actualMonth = date.getMonth() + 1;
+      const actualDay = date.getDate();
+      if (actualMonth !== expectedMonth && actualDay === expectedMonth) {
+        return new Date(date.getFullYear(), expectedMonth - 1, actualMonth);
+      }
+      return date;
+    }
+
+    function parseDepositDate(value, installmentMonth = null) {
       const rawDate = String(value || "").trim();
       if (!rawDate) return "";
 
       const isoDate = rawDate.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
       if (isoDate) {
-        return new Date(Number(isoDate[1]), Number(isoDate[2]) - 1, Number(isoDate[3]));
+        return maybeCorrectDateByInstallmentMonth(new Date(Number(isoDate[1]), Number(isoDate[2]) - 1, Number(isoDate[3])), installmentMonth);
       }
 
       const dayMonthYear = rawDate.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
       if (dayMonthYear) {
-        return new Date(Number(dayMonthYear[3]), Number(dayMonthYear[2]) - 1, Number(dayMonthYear[1]));
+        return maybeCorrectDateByInstallmentMonth(new Date(Number(dayMonthYear[3]), Number(dayMonthYear[2]) - 1, Number(dayMonthYear[1])), installmentMonth);
       }
 
       const parsedDate = new Date(rawDate);
-      return Number.isNaN(parsedDate.getTime()) ? "" : parsedDate;
+      return Number.isNaN(parsedDate.getTime()) ? "" : maybeCorrectDateByInstallmentMonth(parsedDate, installmentMonth);
     }
 
     function formatDateShortId(date) {
@@ -1937,13 +1949,13 @@
       return `${day}-${month}-${year}`;
     }
 
-    function formatDepositDate(value) {
-      const date = parseDepositDate(value);
+    function formatDepositDate(value, installmentMonth = null) {
+      const date = parseDepositDate(value, installmentMonth);
       return date ? formatDateDashId(date) : String(value || "");
     }
 
-    function toDateInputValue(value) {
-      const date = parseDepositDate(value);
+    function toDateInputValue(value, installmentMonth = null) {
+      const date = parseDepositDate(value, installmentMonth);
       if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "";
       const day = String(date.getDate()).padStart(2, "0");
       const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -1951,10 +1963,16 @@
       return `${year}-${month}-${day}`;
     }
 
+    function normalizeDepositDateForStorage(value) {
+      const date = parseDepositDate(value);
+      if (!(date instanceof Date) || Number.isNaN(date.getTime())) return String(value || "");
+      return toDateInputValue(date);
+    }
+
     function getRekapMonthDate(month) {
       const dates = getSelectedTahapDeposits()
         .filter(d => Number(d.bulan) === month)
-        .map(d => parseDepositDate(d.tanggal))
+        .map(d => parseDepositDate(d.tanggal, d.bulan))
         .filter(date => date instanceof Date && !Number.isNaN(date.getTime()))
         .sort((a, b) => a - b);
 
@@ -2422,7 +2440,7 @@
       document.getElementById("setoran-modal-title").innerText = "Edit Setoran Tabungan";
       document.getElementById("edit-deposit-id").value = d.id;
       document.getElementById("deposit-participant").value = d.anggota_id;
-      document.getElementById("deposit-date").value = toDateInputValue(d.tanggal);
+      document.getElementById("deposit-date").value = toDateInputValue(d.tanggal, d.bulan);
       document.getElementById("deposit-amount").value = formatNumberGroup(d.jumlah);
       document.getElementById("deposit-bulan").value = d.bulan;
       document.getElementById("deposit-recorded").value = d.recorded_by;
@@ -2436,7 +2454,7 @@
       const payload = {
         id: id || "",
         anggota_id: document.getElementById("deposit-participant").value,
-        tanggal: formatDepositDate(document.getElementById("deposit-date").value),
+        tanggal: normalizeDepositDateForStorage(document.getElementById("deposit-date").value),
         jumlah: parseMoneyInput(document.getElementById("deposit-amount").value),
         bulan: Number(document.getElementById("deposit-bulan").value),
         recorded_by: document.getElementById("deposit-recorded").value.trim(),
