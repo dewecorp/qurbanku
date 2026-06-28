@@ -707,7 +707,7 @@
     // =========================================================================
     // CONFIGURASI UTAMA DEPLOYMENT (PENTING!)
     // =========================================================================
-    const APP_VERSION = "qurbanku-2026-06-28-dashboard-total-semua-tahap-v16";
+    const APP_VERSION = "qurbanku-2026-06-28-total-unik-rekap-v17";
     // Ubah IS_PREVIEW ke false jika Anda akan mem-publish aplikasi ke Blogger Live.
     const IS_PREVIEW = false; 
     const DEFAULT_GAS_URL = "https://script.google.com/macros/s/AKfycbwbmHjkY5cAlZEhKwn33m1mrIMOqLLp9bFHJO3wX7w0OKCLK1X4RaXXhWu6HwUKbnm0/exec";
@@ -1377,6 +1377,19 @@
       return appState.data.setoran.filter(d => isRecordInSelectedTahap(d));
     }
 
+    function getUniqueMonthlyDeposits(deposits) {
+      const map = new Map();
+      deposits.forEach(d => {
+        const key = `${getRecordTahapId(d)}|${d.anggota_id}|${Number(d.bulan) || 0}`;
+        if (!map.has(key)) map.set(key, d);
+      });
+      return Array.from(map.values());
+    }
+
+    function sumDeposits(deposits) {
+      return deposits.reduce((sum, d) => sum + Number(d.jumlah || 0), 0);
+    }
+
     function renderStageFilters() {
       const selectedId = getSelectedTahapId();
       const options = appState.data.tahap.map(t => `<option value="${escapeHtml(t.id)}" ${t.id === selectedId ? "selected" : ""}>${escapeHtml(t.nama)}${t.status === "Aktif" ? " (Aktif)" : ""}</option>`).join("");
@@ -1396,15 +1409,11 @@
     }
 
     function getParticipantTotalSaving(anggotaId) {
-      return getSelectedTahapDeposits()
-        .filter(d => d.anggota_id === anggotaId)
-        .reduce((sum, d) => sum + Number(d.jumlah), 0);
+      return sumDeposits(getUniqueMonthlyDeposits(getSelectedTahapDeposits().filter(d => d.anggota_id === anggotaId)));
     }
 
     function getParticipantTotalSavingAllStages(anggotaId) {
-      return appState.data.setoran
-        .filter(d => d.anggota_id === anggotaId)
-        .reduce((sum, d) => sum + Number(d.jumlah || 0), 0);
+      return sumDeposits(getUniqueMonthlyDeposits(appState.data.setoran.filter(d => d.anggota_id === anggotaId)));
     }
 
     function getParticipantDeposits(anggotaId) {
@@ -1428,7 +1437,7 @@
       const group = appState.data.kelompok.find(g => g.id === member.kelompok_id);
       const activeStage = getSelectedTahapName();
       const deposits = getParticipantDeposits(member.id);
-      const totalPaid = deposits.reduce((sum, d) => sum + Number(d.jumlah || 0), 0);
+      const totalPaid = sumDeposits(getUniqueMonthlyDeposits(deposits));
       const totalAllStagesPaid = getParticipantTotalSavingAllStages(member.id);
       const allStagePaidMonths = new Set(appState.data.setoran.filter(d => d.anggota_id === member.id).map(d => `${getRecordTahapId(d)}:${Number(d.bulan) || 0}`)).size;
       const paidMonths = new Set(deposits.map(d => Number(d.bulan))).size;
@@ -1528,7 +1537,7 @@
       if (personalTitle) personalTitle.innerHTML = `<i class="fa-solid fa-chart-line text-emerald-600"></i> Status Tabungan Anda`;
       
       // Hitung total tabungan terkumpul global
-      const totalSakuGlobal = appState.data.setoran.reduce((sum, d) => sum + Number(d.jumlah), 0);
+      const totalSakuGlobal = sumDeposits(getUniqueMonthlyDeposits(appState.data.setoran));
       const totalShohibul = appState.data.anggota.length;
       const totalGroup = appState.data.kelompok.length;
       const activeStage = getActiveTahap()?.nama || "Tidak Ada";
